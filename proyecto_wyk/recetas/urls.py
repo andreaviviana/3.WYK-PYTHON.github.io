@@ -12,9 +12,12 @@ urlpatterns = [
     # dominio.com/recetas/editar/1/
     path('editar/<int:id_receta>/', views.editar_receta, name='editar_receta'),
 
+    # dominio.com/recetas/detalle/1/
+    path('detalle/<int:id_receta>/', views.detalle_receta, name='detalle_receta'),
+
     # --- ACCIONES AJAX Y CONSULTAS ---
-    # Ruta para eliminar receta con validación de contraseña
-    path('eliminar-ajax/', views.eliminar_receta_ajax, name='eliminar_receta_ajax'),
+    # Ruta para cambiar el estado de la receta con validación de contraseña
+    path('cambiar-estado-ajax/', views.cambiar_estado_receta_ajax, name='cambiar_estado_receta_ajax'),
 
     # Ruta crítica: Obtiene los insumos de una receta según el producto (Uso en Producción)
     # dominio.com/recetas/api/obtener-por-producto/1/

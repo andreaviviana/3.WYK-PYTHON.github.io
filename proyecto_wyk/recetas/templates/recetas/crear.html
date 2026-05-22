@@ -10,6 +10,7 @@
 
     <style>
         .unit-subtitle { font-size: 0.7rem; color: rgba(255, 255, 255, 0.5); text-transform: lowercase; display: block; margin-top: 2px; }
+        .char-counter { font-size: 0.75rem; color: rgba(255, 255, 255, 0.4); text-align: right; margin-top: 4px; }
         .fila-seleccionable { cursor: pointer; transition: 0.3s; }
         .fila-seleccionable:hover { background: rgba(245, 166, 35, 0.1) !important; }
 
@@ -60,6 +61,7 @@
                 <div class="form-group">
                     <label><i class="fas fa-signature"></i> Nombre de la Receta</label>
                     {{ form.nombre_receta }}
+                    <div id="counter-nombre" class="char-counter">0 / 100</div>
                 </div>
 
                 <div class="form-group">
@@ -82,12 +84,13 @@
             <div class="form-group" style="margin-top: 15px;">
                 <label><i class="fas fa-align-left"></i> Descripción / Instrucciones</label>
                 {{ form.descripcion_receta }}
+                <div id="counter-desc" class="char-counter">0 / 255</div>
             </div>
         </div>
 
         <div class="productos-card">
             <button type="button" class="btn-add-item" onclick="abrirModalMateria()">
-                <i class="fas fa-plus"></i> Añadir Ingrediente
+                <i class="fas fa-plus"></i> Añadir Insumo
             </button>
             <h3 style="margin-bottom: 20px;">Ingredientes de la Receta</h3>
 
@@ -136,7 +139,7 @@
 
 <div class="modal fade modal-wyk-custom" id="modalProductos" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
+        <div class="content modal-content">
             <div class="modal-header modal-header-wyk">
                 <h5 class="modal-title text-gold"><i class="fas fa-cookie me-2"></i> Seleccionar Producto Final</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -152,7 +155,7 @@
                     </thead>
                     <tbody>
                         {% for pr in productos %}
-                        <tr class="fila-seleccionable" data-id="{{ pr.id_producto }}" data-nombre="{{ pr.nombre_producto }}">
+                        <tr class="fila-seleccionable" data-id="{{ pr.id_producto }}" data-nombre="{{ pr.nombre_producto }}" data-tiene-receta="{% if pr.tiene_receta %}true{% else %}false{% endif %}">
                             <td class="text-center text-gold">#{{ pr.id_producto }}</td>
                             <td class="text-white">{{ pr.nombre_producto }}</td>
                             <td class="text-center"><span class="badge-nivel">{{ pr.cant_exist_producto }}</span></td>
@@ -203,11 +206,51 @@
 <script>
     const swalConfig = { background: '#1a0a00', color: '#fff', confirmButtonColor: '#f5a623', heightAuto: false };
 
+    /* VALIDACIÓN DE LONGITUD PARA NOMBRE Y DESCRIPCIÓN */
+    const inputNombre = document.querySelector('input[name="nombre_receta"]');
+    const inputDesc = document.querySelector('textarea[name="descripcion_receta"]');
+    const counterNombre = document.getElementById('counter-nombre');
+    const counterDesc = document.getElementById('counter-desc');
+
+    inputNombre.addEventListener('input', function() {
+        if (this.value.length > 100) this.value = this.value.slice(0, 100);
+        counterNombre.innerText = `${this.value.length} / 100`;
+    });
+
+    inputDesc.addEventListener('input', function() {
+        if (this.value.length > 255) this.value = this.value.slice(0, 255);
+        counterDesc.innerText = `${this.value.length} / 255`;
+    });
+
+    /* VALIDACIONES EN TIEMPO REAL: CANTIDAD BASE (RENDIMIENTO) - SOLO ENTEROS */
+    const inputCantidadBase = document.querySelector('input[name="cantidad_base"]');
+    if (inputCantidadBase) {
+        inputCantidadBase.addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9]/g, '');
+            if (this.value.length > 8) this.value = this.value.slice(0, 8);
+        });
+    }
+
     /* SELECCIÓN PRODUCTO FINAL */
     document.querySelectorAll('#tablaSelectorProd tbody tr').forEach(fila => {
         fila.addEventListener('click', function() {
-            document.getElementById('id_prod_hidden').value = this.dataset.id;
-            document.getElementById('prod_display').value = this.dataset.nombre;
+            const id = this.dataset.id;
+            const nombre = this.dataset.nombre;
+            const tieneReceta = this.dataset.tieneReceta === 'true';
+
+            if (tieneReceta) {
+                bootstrap.Modal.getInstance(document.getElementById('modalProductos')).hide();
+                Swal.fire({
+                    ...swalConfig,
+                    icon: 'error',
+                    title: 'Producto ya Vinculado',
+                    html: `El producto <b class="text-gold">${nombre}</b> ya posee una receta maestra registrada. No puedes duplicarla.`
+                });
+                return;
+            }
+
+            document.getElementById('id_prod_hidden').value = id;
+            document.getElementById('prod_display').value = nombre;
             bootstrap.Modal.getInstance(document.getElementById('modalProductos')).hide();
         });
     });
@@ -219,13 +262,37 @@
 
     document.querySelectorAll('#tablaSelectorMateria tbody tr').forEach(fila => {
         fila.addEventListener('click', function() {
-            agregarFilaIngrediente(this.dataset.id, this.dataset.nombre, this.dataset.unidad);
+            const id = this.dataset.id;
+            const nombre = this.dataset.nombre;
+            const unidad = this.dataset.unidad;
+
+            const selectInsumos = document.querySelectorAll('#tabla-ingredientes tbody select[name$="-id_materia_prima_fk_det_rec"]');
+            let yaExiste = false;
+
+            for (let i = 0; i < selectInsumos.length; i++) {
+                if (selectInsumos[i].value === id) {
+                    yaExiste = true;
+                    break;
+                }
+            }
+
+            if (yaExiste) {
+                bootstrap.Modal.getInstance(document.getElementById('modalMateriaPrima')).hide();
+                Swal.fire({
+                    ...swalConfig,
+                    icon: 'error',
+                    title: 'Ingrediente Duplicado',
+                    html: `El insumo <b class="text-gold">${nombre}</b> ya se encuentra en el detalle de la receta. No puedes repetirlo.`
+                });
+                return;
+            }
+
+            agregarFilaIngrediente(id, nombre, unidad);
             bootstrap.Modal.getInstance(document.getElementById('modalMateriaPrima')).hide();
         });
     });
 
     function agregarFilaIngrediente(item_id, nombre, unidad) {
-        // El prefijo debe ser el mismo que en views.py
         const totalFormsInput = document.getElementById('id_insumos_receta-TOTAL_FORMS');
         const totalForms = parseInt(totalFormsInput.value);
 
@@ -237,15 +304,11 @@
         tbody.appendChild(tr);
 
         const nuevaFila = tbody.lastElementChild;
-
-        // 1. Mostrar nombre
         nuevaFila.querySelector('.input-item-readonly').value = nombre;
 
-        // 2. Asignar ID al select (usando el nombre correcto del modelo)
         const selectItem = nuevaFila.querySelector('select[name*="id_materia_prima_fk_det_rec"]');
         if(selectItem) selectItem.value = item_id;
 
-        // 3. HABILITAR INPUT DE CANTIDAD (Rectificado con el nombre del modelo)
         const inputCantidad = nuevaFila.querySelector('input[name*="cantidad_insumo_base"]');
         if(inputCantidad) {
             inputCantidad.removeAttribute('readonly');
@@ -253,7 +316,13 @@
             inputCantidad.style.pointerEvents = 'auto';
             inputCantidad.required = true;
 
-            // Añadir unidad visualmente
+            inputCantidad.addEventListener('input', function() {
+                if (this.value.includes('-')) this.value = this.value.replace(/-/g, '');
+                if (parseFloat(this.value) < 0) this.value = '';
+                const maxCaracteres = 8;
+                if (this.value.length > maxCaracteres) this.value = this.value.slice(0, maxCaracteres);
+            });
+
             const spanUnidad = document.createElement('span');
             spanUnidad.className = 'unit-subtitle';
             spanUnidad.innerText = unidad ? unidad.toLowerCase() : 'und';
@@ -265,17 +334,57 @@
 
     function eliminarFila(btn) {
         btn.closest('tr').remove();
-        // Nota: En una implementación completa deberías actualizar el TOTAL_FORMS,
-        // pero para crear una nueva receta desde cero así funciona bien.
+        const totalFormsInput = document.getElementById('id_insumos_receta-TOTAL_FORMS');
+        const filas = document.querySelectorAll('#tabla-ingredientes tbody tr');
+        totalFormsInput.value = filas.length;
+
+        filas.forEach((fila, indice) => {
+            fila.querySelectorAll('input, select').forEach(input => {
+                if (input.name) input.name = input.name.replace(/insumos_receta-\d+-/, `insumos_receta-${indice}-`);
+                if (input.id) input.id = input.id.replace(/id_insumos_receta-\d+ Davies-/, `id_insumos_receta-${indice}-`);
+            });
+        });
     }
 
     function confirmarGuardado() {
         const nombre = document.querySelector('input[name="nombre_receta"]').value;
         const producto = document.getElementById('id_prod_hidden').value;
-        const filas = document.querySelectorAll('#tabla-ingredientes tbody tr').length;
+        const inputBase = document.querySelector('input[name="cantidad_base"]');
+        const valorBase = inputBase ? inputBase.value.trim() : '';
+        const filas = document.querySelectorAll('#tabla-ingredientes tbody tr');
 
-        if (!nombre || !producto || filas === 0) {
+        if (nombre.trim().length < 3) {
+            Swal.fire({...swalConfig, icon: 'warning', title: 'Nombre muy corto', text: 'El nombre debe tener al menos 3 caracteres.'});
+            return;
+        }
+
+        if (!nombre || !producto || filas.length === 0) {
             Swal.fire({...swalConfig, icon: 'warning', title: 'Atención', text: 'Completa el nombre, el producto y añade al menos un ingrediente.'});
+            return;
+        }
+
+        if (valorBase === '' || parseInt(valorBase) <= 0) {
+            Swal.fire({...swalConfig, icon: 'warning', title: 'Cantidad Base Inválida', text: 'La Cantidad Base (Rendimiento) debe ser un número entero mayor a 0.'});
+            return;
+        }
+
+        let cantidadesValidas = true;
+        let mensajeError = '';
+
+        for (let i = 0; i < filas.length; i++) {
+            const inputCantidad = filas[i].querySelector('input[name*="cantidad_insumo_base"]');
+            const nombreInsumo = filas[i].querySelector('.input-item-readonly').value;
+            const valor = inputCantidad ? inputCantidad.value.trim() : '';
+
+            if (valor === '' || parseFloat(valor) <= 0) {
+                cantidadesValidas = false;
+                mensajeError = `La cantidad para el ingrediente <b class="text-gold">${nombreInsumo}</b> debe ser estrictamente mayor a 0.`;
+                break;
+            }
+        }
+
+        if (!cantidadesValidas) {
+            Swal.fire({...swalConfig, icon: 'warning', title: 'Cantidad Inválida', html: mensajeError});
             return;
         }
 

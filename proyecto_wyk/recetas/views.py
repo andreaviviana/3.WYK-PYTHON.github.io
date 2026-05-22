@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import transaction
 from django.http import JsonResponse
+from django.db.models import Exists, OuterRef
 import json
 
 from .models import Receta, DetalleReceta
@@ -32,7 +33,12 @@ def crear_receta(request):
         messages.error(request, "Acceso denegado. Solo el administrador puede crear recetas.")
         return redirect('lista_recetas')
 
-    productos = Producto.objects.filter(estado_producto=True)
+    # Anotación eficiente usando subconsultas de Django para detectar recetas previas
+    productos = Producto.objects.filter(estado_producto=True).annotate(
+        tiene_receta=Exists(
+            Receta.objects.filter(id_producto_fk_receta=OuterRef('pk'))
+        )
+    )
     materias_primas = MateriaPrima.objects.filter(estado_materia_prima=True)
 
     if request.method == 'POST':
@@ -109,22 +115,45 @@ def editar_receta(request, id_receta):
 
 
 @login_required
-def eliminar_receta_ajax(request):
-    """ Elimina una receta de forma lógica o física (según tu preferencia, aquí física) """
+def detalle_receta(request, id_receta):
+    """ Detalle de una receta específica (Insumos vinculados) - Estilo Compras """
+    if request.user.rol_fk_usuario.rol not in ['ADMIN', 'PASTELERO', 'PANADERO']:
+        messages.error(request, "Acceso denegado. No tienes permisos para ver esta sección.")
+        return redirect('inicio')
+
+    receta = get_object_or_404(Receta, id_receta=id_receta)
+    insumos = DetalleReceta.objects.filter(id_receta_fk_det_rec=receta).select_related('id_materia_prima_fk_det_rec')
+
+    return render(request, 'recetas/detalle.html', {
+        'receta': receta,
+        'insumos': insumos
+    })
+
+
+# ------------------------------ SEGURIDAD AJAX (ESTILO COMPRAS) ------------------------------
+
+@login_required
+def cambiar_estado_receta_ajax(request):
+    """ Alterna el estado (Activa/Inactiva) de una receta de forma lógica mediante contraseña """
     if request.method == 'POST' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        if request.user.rol_fk_usuario.rol != 'ADMIN':
+            return JsonResponse({'success': False, 'message': 'Acceso denegado.'})
+
         try:
             data = json.loads(request.body)
             password = data.get('password')
             id_rec = data.get('id_receta')
+            nuevo_estado = data.get('nuevo_estado')
 
             if not request.user.check_password(password):
                 return JsonResponse({'success': False, 'message': 'Contraseña incorrecta.'})
 
             receta = get_object_or_404(Receta, id_receta=id_rec)
-            nombre = receta.nombre_receta
-            receta.delete()  # Se borra en cascada los detalles por el modelo
+            receta.estado_receta = nuevo_estado
+            receta.save()
 
-            return JsonResponse({'success': True, 'message': f"Receta '{nombre}' eliminada correctamente."})
+            estado_str = "activada" if nuevo_estado else "inactivada"
+            return JsonResponse({'success': True, 'message': f"La receta '{receta.nombre_receta}' fue {estado_str} correctamente."})
         except Exception as e:
             return JsonResponse({'success': False, 'message': f"Error: {str(e)}"})
 

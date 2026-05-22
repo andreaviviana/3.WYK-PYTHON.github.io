@@ -93,7 +93,7 @@
                 </thead>
                 <tbody>
                     {% for r in recetas %}
-                    <tr>
+                    <tr data-estado="{% if r.estado_receta %}activo{% else %}inactivo{% endif %}">
                         <td class="text-center text-gold fw-bold">#{{ r.id_receta }}</td>
                         <td>
                             <div class="fw-bold text-white">{{ r.nombre_receta }}</div>
@@ -105,7 +105,7 @@
                             </div>
                         </td>
                         <td class="text-center">
-                            <span class="fw-bold text-white">{{ r.cantidad_base }}</span> 
+                            <span class="fw-bold text-white">{{ r.cantidad_base }}</span>
                             <small class="text-muted">uds</small>
                         </td>
                         <td class="text-center">
@@ -115,9 +115,19 @@
                             </div>
                         </td>
                         <td class="text-center">
-                            <span class="badge-estado {% if r.estado_receta %}estado-activa{% else %}estado-inactiva{% endif %}">
-                                {% if r.estado_receta %}ACTIVA{% else %}INACTIVA{% endif %}
-                            </span>
+                            <div class="switch-container">
+                                <div class="form-check form-switch p-0 m-0 d-inline-block">
+                                    <input class="form-check-input" type="checkbox" role="switch"
+                                           id="switch{{ r.id_receta }}"
+                                           {% if r.estado_receta %}checked{% endif %}
+                                           {% if request.user.rol_fk_usuario.rol != 'ADMIN' %}disabled{% endif %}
+                                           onchange="ajaxCambiarEstadoReceta('{{ r.id_receta }}', this)">
+                                    <label class="form-check-label text-status-toggle {% if r.estado_receta %}text-active{% else %}text-inactive{% endif %}"
+                                           for="switch{{ r.id_receta }}" id="label{{ r.id_receta }}" style="display: none;">
+                                        {% if r.estado_receta %}Activo{% else %}Inactivo{% endif %}
+                                    </label>
+                                </div>
+                            </div>
                         </td>
                         <td class="text-center">
                             <div class="btn-group-actions">
@@ -129,11 +139,8 @@
                                 <a href="{% url 'editar_receta' r.id_receta %}" class="btn-action" style="color: #f5a623;" title="Editar">
                                     <i class="fas fa-edit"></i>
                                 </a>
-
-                                <button type="button" class="btn-action" style="color: #ff8a8a;"
-                                        onclick="confirmarEliminarReceta('{{ r.id_receta }}', '{{ r.nombre_receta }}')" title="Eliminar">
-                                    <i class="fas fa-trash-alt"></i>
-                                </button>
+                                {% else %}
+                                <span class="text-muted" style="font-size: 0.7rem;">Lectura</span>
                                 {% endif %}
                             </div>
                         </td>
@@ -165,7 +172,8 @@
         background: '#1a0a00',
         color: '#fff',
         confirmButtonColor: '#f5a623',
-        heightAuto: false
+        heightAuto: false,
+        allowOutsideClick: false
     };
 
     // Buscador en tiempo real
@@ -180,52 +188,56 @@
         });
     }
 
-    // Confirmación para eliminar receta
-    function confirmarEliminarReceta(id, nombre) {
+    // Alternar Estado de la Receta Maestra vía AJAX con validación por contraseña
+    function ajaxCambiarEstadoReceta(idReceta, element) {
+        const nuevoEstado = element.checked;
+        const label = document.getElementById(`label${idReceta}`);
+        const tr = element.closest('tr');
+        element.checked = !nuevoEstado;
+
         Swal.fire({
             ...swalWykConfig,
-            title: '¿Eliminar Receta?',
-            html: `Estás a punto de eliminar la receta: <b class="text-gold">${nombre}</b>.<br><small class="text-danger">Esta acción no se puede deshacer.</small>`,
+            title: nuevoEstado ? '¿Activar Receta Maestra?' : '¿Inactivar Receta Maestra?',
+            text: "Ingresa tu contraseña de administrador para confirmar:",
             icon: 'warning',
             input: 'password',
-            inputAttributes: { placeholder: 'Confirma tu contraseña de administrador' },
+            inputAttributes: { placeholder: 'Contraseña de administrador', autocapitalize: 'off' },
             showCancelButton: true,
-            confirmButtonText: 'Eliminar permanentemente',
+            confirmButtonText: 'Confirmar',
             cancelButtonText: 'Cancelar',
-            showLoaderOnConfirm: true,
             preConfirm: (password) => {
-                if (!password) {
-                    Swal.showValidationMessage('La contraseña es obligatoria');
-                    return false;
-                }
-                return fetch("{% url 'eliminar_receta_ajax' %}", {
+                if (!password) { Swal.showValidationMessage('La contraseña es obligatoria'); return false; }
+
+                return fetch("{% url 'verificar_password_ajax' %}", {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': '{{ csrf_token }}',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify({ id_receta: id, password: password })
+                    headers: { 'X-CSRFToken': '{{ csrf_token }}', 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `password=${encodeURIComponent(password)}`
                 })
                 .then(response => response.json())
                 .then(data => {
-                    if (!data.success) throw new Error(data.message);
-                    return data;
+                    if (!data.valid) throw new Error('Contraseña incorrecta');
+                    return password;
                 })
-                .catch(error => {
-                    Swal.showValidationMessage(error.message);
-                });
+                .catch(error => { Swal.showValidationMessage(error.message); });
             }
         }).then((result) => {
             if (result.isConfirmed) {
-                Swal.fire({
-                    ...swalWykConfig,
-                    icon: 'success',
-                    title: '¡Eliminada!',
-                    text: result.value.message,
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => location.reload());
+                fetch("{% url 'cambiar_estado_receta_ajax' %}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify({ id_receta: idReceta, nuevo_estado: nuevoEstado, password: result.value })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        element.checked = nuevoEstado;
+                        if (label) label.innerText = nuevoEstado ? 'Activo' : 'Inactivo';
+                        tr.setAttribute('data-estado', nuevoEstado ? 'activo' : 'inactivo');
+                        Swal.fire({ ...swalWykConfig, icon: 'success', title: '¡Operación Exitosa!', text: data.message });
+                    } else {
+                        Swal.fire({ ...swalWykConfig, icon: 'error', title: 'Error', text: data.message });
+                    }
+                });
             }
         });
     }
