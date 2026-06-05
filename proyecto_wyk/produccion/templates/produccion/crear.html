@@ -198,7 +198,7 @@
                     </thead>
                     <tbody>
                         {% for m in materias_primas %}
-                        <tr class="fila-seleccionable" data-id="{{ m.id_materia_prima }}" data-nombre="{{ m.nombre_materia_prima }}" data-stock="{{ m.cantidad_exist_mat_prima|stringformat:'.3f' }}">
+                        <tr class="fila-seleccionable" data-id="{{ m.id_materia_prima }}" data-nombre="{{ m.nombre_materia_prima }}" data-stock="{{ m.cantidad_exist_mat_prima|stringformat:'.3f' }}" data-unidad="{{ m.presentacion_mat_prima|lower }}">
                             <td class="text-center text-gold">#{{ m.id_materia_prima }}</td>
                             <td class="text-white">{{ m.nombre_materia_prima }}</td>
                             <td class="text-center">
@@ -243,7 +243,6 @@
             document.getElementById('id_prod_final_hidden').value = idProd;
             document.getElementById('prod_final_display').value = nombreProd;
 
-            // Consultar receta
             fetch(`{% url 'obtener_receta_por_producto' %}?id_producto=${idProd}`)
             .then(res => res.json())
             .then(data => {
@@ -251,7 +250,7 @@
                     document.getElementById('id_receta_hidden').value = data.id_receta;
                     document.querySelector('#tabla-insumos tbody').innerHTML = '';
                     document.getElementById('id_insumos_set-TOTAL_FORMS').value = 0;
-                    data.insumos.forEach(i => agregarFilaInsumo(i.id_materia, i.stock, i.cantidad));
+                    data.insumos.forEach(i => agregarFilaInsumo(i.id_materia, i.stock, i.cantidad, data.cantidad_base_receta, i.unidad));
                 } else {
                     Swal.fire({...swalConfig, icon: 'info', title: 'Receta no encontrada', text: data.message});
                 }
@@ -260,9 +259,21 @@
         });
     });
 
+    document.querySelector('input[name="cant_produccion"]').addEventListener('input', function() {
+        const nuevaCant = parseFloat(this.value) || 0;
+        document.querySelectorAll('#tabla-insumos tbody tr').forEach(fila => {
+            const input = fila.querySelector('input[name*="cantidad_requerida"]');
+            const proporcion = parseFloat(input.getAttribute('data-proporcion'));
+            if (!isNaN(proporcion)) {
+                input.value = (proporcion * nuevaCant).toFixed(3);
+                validarStockFila(input);
+            }
+        });
+    });
+
     function abrirModalInsumo() { new bootstrap.Modal(document.getElementById('modalMateriaPrima')).show(); }
 
-    function agregarFilaInsumo(item_id, item_stock, cant = '') {
+    function agregarFilaInsumo(item_id, item_stock, cant = '', base_receta = 1, unidad = 'unidades') {
         const totalFormsInput = document.getElementById('id_insumos_set-TOTAL_FORMS');
         const totalForms = parseInt(totalFormsInput.value);
         const template = document.getElementById('empty-row-insumo');
@@ -271,27 +282,53 @@
         tr.innerHTML = tr.innerHTML.replace(/__prefix__/g, totalForms);
         const tbody = document.querySelector('#tabla-insumos tbody');
         tbody.appendChild(tr);
+
         const select = tbody.lastElementChild.querySelector('select');
         const inputCant = tbody.lastElementChild.querySelector('input[name*="cantidad_requerida"]');
         select.value = item_id;
-        inputCant.value = cant;
+
         inputCant.setAttribute('data-stock-max', item_stock);
+        inputCant.setAttribute('data-unidad', unidad);
+
+        const proporcion = cant / base_receta;
+        inputCant.setAttribute('data-proporcion', proporcion);
+
+        const cantidadProduccion = document.querySelector('input[name="cant_produccion"]').value || 1;
+        inputCant.value = (proporcion * cantidadProduccion).toFixed(3);
+
         inputCant.addEventListener('input', function() { validarStockFila(this); });
         totalFormsInput.value = totalForms + 1;
     }
 
     function validarStockFila(input) {
         const stockMax = parseFloat(input.getAttribute('data-stock-max'));
+        const unidad = input.getAttribute('data-unidad') || 'unidades';
         const valorIngresado = parseFloat(input.value);
+
+        const selectElement = input.closest('tr').querySelector('select');
+        const nombreInsumo = selectElement.options[selectElement.selectedIndex].text;
+
+        // Aquí el mensaje usa la unidad que viene exactamente de tu base de datos
         if (valorIngresado > stockMax) {
             input.classList.add('stock-insuficiente');
-            Swal.fire({...swalConfig, icon: 'warning', title: 'Stock Insuficiente', text: `Solo tienes ${stockMax} disponibles.`, toast: true, position: 'top-end', timer: 3000, showConfirmButton: false});
-        } else { input.classList.remove('stock-insuficiente'); }
+            Swal.fire({
+                ...swalConfig,
+                icon: 'warning',
+                title: 'Stock Insuficiente',
+                text: `El insumo "${nombreInsumo}" no alcanza. Solo tienes ${stockMax} ${unidad} en stock.`,
+                toast: true,
+                position: 'top-end',
+                timer: 5000,
+                showConfirmButton: false
+            });
+        } else {
+            input.classList.remove('stock-insuficiente');
+        }
     }
 
     document.querySelectorAll('#tablaSelectorMateria tbody tr').forEach(fila => {
         fila.addEventListener('click', function() {
-            agregarFilaInsumo(this.getAttribute('data-id'), this.getAttribute('data-stock'));
+            agregarFilaInsumo(this.getAttribute('data-id'), this.getAttribute('data-stock'), 0, 1, this.getAttribute('data-unidad'));
             bootstrap.Modal.getInstance(document.getElementById('modalMateriaPrima')).hide();
         });
     });

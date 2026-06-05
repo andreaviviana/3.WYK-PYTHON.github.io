@@ -164,6 +164,7 @@ def obtener_receta_por_producto(request):
     return JsonResponse({
         'success': True,
         'id_receta': receta.id_receta,
+        'cantidad_base_receta': float(receta.cantidad_base),
         'insumos': insumos
     })
 
