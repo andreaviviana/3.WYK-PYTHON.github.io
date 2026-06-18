@@ -442,15 +442,29 @@
         if(inputSubtotal) {
             inputSubtotal.removeAttribute('readonly');
             inputSubtotal.removeAttribute('disabled');
-            inputSubtotal.addEventListener('input', sumarTodo);
+
+            // Forzar por JS el límite de 8 caracteres reales cortando la entrada excedente
+            inputSubtotal.addEventListener('input', function() {
+                if (this.value.length > 8) {
+                    this.value = this.value.slice(0, 8);
+                }
+                sumarTodo();
+            });
             inputSubtotal.addEventListener('keydown', validarTeclas);
         }
 
         if(inputCantidad) {
             inputCantidad.removeAttribute('readonly');
             inputCantidad.removeAttribute('disabled');
+
+            // Forzar por JS el límite de 8 caracteres reales cortando la entrada excedente
+            inputCantidad.addEventListener('input', function() {
+                if (this.value.length > 8) {
+                    this.value = this.value.slice(0, 8);
+                }
+                sumarTodo();
+            });
             inputCantidad.addEventListener('keydown', validarTeclas);
-            inputCantidad.addEventListener('input', sumarTodo);
         }
 
         totalFormsInput.value = totalForms + 1;
