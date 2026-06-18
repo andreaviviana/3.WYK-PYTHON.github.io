@@ -134,7 +134,12 @@ def crear_compra(request):
 
     proveedores = Proveedor.objects.filter(estado_proveedor=True)
     materias_primas = MateriaPrima.objects.filter(estado_materia_prima=True)
-    productos = Producto.objects.filter(estado_producto=True)
+
+    # CORRECCIÓN AQUÍ: Se cambió 'categoria_producto' por 'tipo_producto'
+    productos = Producto.objects.filter(
+        estado_producto=True,
+        tipo_producto__in=['REVENTA', 'ASEO']
+    )
 
     form = CompraForm(request.POST or None)
     formset_mat = DetalleMateriaPrimaFormSet(request.POST or None, prefix='detallecompramateriaprima_set')
@@ -168,6 +173,11 @@ def crear_compra(request):
                         formset_prod.instance = nueva_compra
                         if formset_prod.is_valid():
                             for d in formset_prod.save(commit=False):
+                                # CORRECCIÓN AQUÍ: Se cambió 'categoria_producto' por 'tipo_producto'
+                                prod = d.id_prod_fk_det_compra_prod
+                                if prod.tipo_producto not in ['REVENTA', 'ASEO']:
+                                    raise ValueError(f"El producto '{prod.nombre_producto}' no es permitido para compra.")
+
                                 d.estado_det_compra_prod = True
                                 d.save()
                                 total_calculado += d.sub_total_prod_comprado

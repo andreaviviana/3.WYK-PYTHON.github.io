@@ -10,6 +10,7 @@ class Producto(models.Model):
         PANADERIA = 'PANADERIA', 'Panadería'
         PASTELERIA = 'PASTELERIA', 'Pastelería'
         ASEO = 'ASEO', 'Aseo'
+        REVENTA = 'REVENTA', 'Reventa'
 
     id_producto = models.BigIntegerField(primary_key=True, db_column='id_producto')
     nombre_producto = models.CharField(max_length=50, unique=True, db_column='nombre_producto')

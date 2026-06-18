@@ -271,6 +271,7 @@
                         <tr>
                             <th style="width: 80px;" class="text-center">ID</th>
                             <th>NOMBRE PRODUCTO</th>
+                            <th>CATEGORÍA</th>
                             <th class="text-center">STOCK</th>
                         </tr>
                     </thead>
@@ -279,6 +280,7 @@
                         <tr class="fila-seleccionable" data-id="{{ pr.id_producto }}" data-nombre="{{ pr.nombre_producto }}">
                             <td class="text-center text-gold">{{ pr.id_producto }}</td>
                             <td class="text-white">{{ pr.nombre_producto }}</td>
+                            <td class="text-gold" style="font-size: 0.75rem;">{{ pr.tipo_producto }}</td>
                             <td class="text-center">
                                 <span class="badge-nivel">{{ pr.cant_exist_producto }}</span>
                                 <span class="unit-subtitle">unid</span>
