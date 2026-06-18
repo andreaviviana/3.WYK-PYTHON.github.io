@@ -264,18 +264,21 @@
         const contadorDesc = document.getElementById('contador_descripcion');
         const inputFechaVenc = document.getElementById('id_fecha_vencimiento');
 
-        // --- RESTRICCIÓN PREVENTIVA EN EL CALENDARIO NATIVO (MÍNIMO MAÑANA) ---
+        // --- RESTRICCIÓN AL INTERACTUAR CON EL CALENDARIO NATIVO ---
+        // Al hacer click o focus para cambiarla, bloqueamos fechas pasadas y el mismo día
         if (inputFechaVenc) {
-            const hoy = new Date();
-            const mañana = new Date(hoy);
-            mañana.setDate(hoy.getDate() + 1);
+            inputFechaVenc.addEventListener('focus', function() {
+                const hoy = new Date();
+                const mañana = new Date(hoy);
+                mañana.setDate(hoy.getDate() + 1);
 
-            const yyyy = mañana.getFullYear();
-            const mm = String(mañana.getMonth() + 1).padStart(2, '0');
-            const dd = String(mañana.getDate()).padStart(2, '0');
+                const yyyy = mañana.getFullYear();
+                const mm = String(mañana.getMonth() + 1).padStart(2, '0');
+                const dd = String(mañana.getDate()).padStart(2, '0');
 
-            const fechaMinimaStr = `${yyyy}-${mm}-${dd}`;
-            inputFechaVenc.setAttribute('min', fechaMinimaStr);
+                const fechaMinimaStr = `${yyyy}-${mm}-${dd}`;
+                this.setAttribute('min', fechaMinimaStr);
+            });
         }
 
         // --- CONTADOR DINÁMICO DE CARACTERES EN EL NOMBRE ---
@@ -377,7 +380,7 @@
             return;
         }
 
-        // --- VALIDACIÓN LÓGICA DE LA FECHA DE VENCIMIENTO ---
+        // --- VALIDACIÓN LÓGICA DE LA FECHA DE VENCIMIENTO (BLOQUEA AL ENVIAR) ---
         const fechaSeleccionada = new Date(fechaVencVal + 'T00:00:00');
         const fechaHoy = new Date();
         fechaHoy.setHours(0, 0, 0, 0);
