@@ -29,6 +29,9 @@
 
         /* Estilos para la unidad */
         .input-unidad-wrapper { display: flex; flex-direction: column; align-items: flex-start; }
+
+        /* Estilo contador */
+        .char-counter { font-size: 0.75rem; color: #f5a623; text-align: right; display: block; margin-top: 4px; }
     </style>
 {% endblock %}
 
@@ -50,6 +53,7 @@
                 <div class="form-group">
                     <label><i class="fas fa-tag"></i> Nombre del Lote / Producción</label>
                     {{ form.nombre_produccion }}
+                    <span class="char-counter" id="count-nombre">0 / 50</span>
                 </div>
 
                 <div class="form-group">
@@ -89,6 +93,7 @@
             <div class="form-group">
                 <label><i class="fas fa-align-left"></i> Notas / Observaciones</label>
                 {{ form.descripcion_produccion }}
+                <span class="char-counter" id="count-desc">0 / 200</span>
             </div>
         </div>
 
@@ -224,6 +229,20 @@
 <script>
     const swalConfig = { background: '#1a0a00', color: '#fff', confirmButtonColor: '#f5a623', heightAuto: false };
 
+    function formatVisual(val) { return parseFloat(parseFloat(val).toFixed(3)); }
+
+    const fieldNombre = document.querySelector('input[name="nombre_produccion"]');
+    const fieldDesc = document.querySelector('textarea[name="descripcion_produccion"]');
+
+    function initCounter(el, idCounter, max) {
+        el.setAttribute('maxlength', max);
+        el.addEventListener('input', function() {
+            document.getElementById(idCounter).innerText = `${this.value.length} / ${max}`;
+        });
+    }
+    if(fieldNombre) initCounter(fieldNombre, 'count-nombre', 50);
+    if(fieldDesc) initCounter(fieldDesc, 'count-desc', 200);
+
     function setupSearch(inputId, tableId) {
         const input = document.getElementById(inputId);
         if (input) {
@@ -274,24 +293,25 @@
         });
     });
 
-    // Validación Cantidad a Producir
+    // Validación Cantidad a Producir (Solo enteros)
     const inputCantProd = document.querySelector('input[name="cant_produccion"]');
     inputCantProd.addEventListener('input', function() {
+        this.value = this.value.replace(/[^0-9]/g, ''); // Solo permite números
         if (this.value.length > 8) this.value = this.value.slice(0, 8);
-        if (this.value !== "" && parseFloat(this.value) <= 0) this.value = '';
+        if (this.value !== "" && parseInt(this.value) <= 0) this.value = '';
 
-        const nuevaCant = parseFloat(this.value) || 0;
+        const nuevaCant = parseInt(this.value) || 0;
         document.querySelectorAll('#tabla-insumos tbody tr').forEach(fila => {
             const input = fila.querySelector('input[name*="cantidad_requerida"]');
             const proporcion = parseFloat(input.getAttribute('data-proporcion'));
             if (!isNaN(proporcion)) {
-                input.value = nuevaCant > 0 ? (proporcion * nuevaCant).toFixed(3) : '0.000';
+                input.value = nuevaCant > 0 ? formatVisual(proporcion * nuevaCant) : '0.000';
                 validarStockFila(input);
             }
         });
     });
     inputCantProd.addEventListener('keydown', function(e) {
-        if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+        if (['e', 'E', '+', '-', '.', ','].includes(e.key)) e.preventDefault();
     });
 
     function abrirModalInsumo() { new bootstrap.Modal(document.getElementById('modalMateriaPrima')).show(); }
@@ -320,7 +340,6 @@
 
         select.value = item_id;
 
-        // Agregar unidad visualmente con la clase .unit-subtitle
         tdCant.classList.add('input-unidad-wrapper');
         const spanUnidad = document.createElement('span');
         spanUnidad.className = 'unit-subtitle';
@@ -347,7 +366,7 @@
         inputCant.setAttribute('data-proporcion', proporcion);
 
         const cantidadProduccion = document.querySelector('input[name="cant_produccion"]').value || 1;
-        inputCant.value = (proporcion * cantidadProduccion).toFixed(3);
+        inputCant.value = formatVisual(proporcion * cantidadProduccion);
 
         totalFormsInput.value = totalForms + 1;
     }
