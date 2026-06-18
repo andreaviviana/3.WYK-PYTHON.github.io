@@ -48,6 +48,35 @@
         }
 
         .total-text { font-size: 1.5rem; color: #f5a623; font-weight: 700; }
+
+        /* Estilos para el select de mesas personalizados con la línea estética de WYK */
+        .select-mesa-wyk {
+            background: rgba(0, 0, 0, 0.2);
+            color: white;
+            border: 1px solid rgba(245, 166, 35, 0.3);
+            padding: 10px;
+            border-radius: 5px;
+            width: 100%;
+            outline: none;
+            transition: 0.3s;
+        }
+        .select-mesa-wyk:focus {
+            border-color: #f5a623;
+            box-shadow: 0 0 5px rgba(245, 166, 35, 0.4);
+        }
+        .select-mesa-wyk option {
+            background: #1a0a00;
+            color: white;
+        }
+
+        /* Contenedor del contador alineado a la derecha igual al diseño */
+        .contador-textarea-container {
+            text-align: right;
+            font-size: 0.85rem;
+            color: #f5a623;
+            margin-top: 5px;
+            font-weight: 500;
+        }
     </style>
 {% endblock %}
 
@@ -64,19 +93,33 @@
 
         <div class="form-card-wyk">
             <div class="form-grid">
-                {# Si es Cajero, el campo se oculta y se envía vacío. El ADMIN y MESERO lo ven normal #}
+                {# Si es Cajero, el campo se oculta y se envía vacío con una mesa por defecto (0 o vacía) #}
                 {% if user.rol_fk_usuario.rol == 'CAJERO' %}
-                    <div style="display: none;">
-                        {{ form.numero_mesa }}
-                    </div>
+                    <input type="hidden" name="numero_mesa" id="id_numero_mesa" value="">
                     <div class="form-group">
                         <label><i class="fas fa-info-circle"></i> Tipo de Venta</label>
                         <input type="text" class="input-wyk" value="VENTA DIRECTA (MOSTRADOR)" readonly style="opacity: 0.8; color: #28a745; border-color: #28a745;">
                     </div>
                 {% else %}
                     <div class="form-group">
-                        <label><i class="fas fa-chair"></i> Número de Mesa (Opcional)</label>
-                        {{ form.numero_mesa }}
+                        <label><i class="fas fa-chair"></i> Número de Mesa (Seleccione de la 1 a la 14)</label>
+                        <select name="numero_mesa" id="id_numero_mesa" class="select-mesa-wyk">
+                            <option value="" selected>---------</option>
+                            <option value="1">Mesa 1</option>
+                            <option value="2">Mesa 2</option>
+                            <option value="3">Mesa 3</option>
+                            <option value="4">Mesa 4</option>
+                            <option value="5">Mesa 5</option>
+                            <option value="6">Mesa 6</option>
+                            <option value="7">Mesa 7</option>
+                            <option value="8">Mesa 8</option>
+                            <option value="9">Mesa 9</option>
+                            <option value="10">Mesa 10</option>
+                            <option value="11">Mesa 11</option>
+                            <option value="12">Mesa 12</option>
+                            <option value="13">Mesa 13</option>
+                            <option value="14">Mesa 14</option>
+                        </select>
                     </div>
                 {% endif %}
 
@@ -91,9 +134,12 @@
                 </div>
             </div>
 
-            <div class="form-group">
+            <div class="form-group" id="contenedor-observaciones">
                 <label><i class="fas fa-align-left"></i> Observaciones</label>
                 {{ form.descripcion }}
+                <div class="contador-textarea-container">
+                    <span id="char-count">0</span> / 200
+                </div>
             </div>
         </div>
 
@@ -203,6 +249,44 @@
 <script>
     const swalConfig = { background: '#1a0a00', color: '#fff', confirmButtonColor: '#f5a623', heightAuto: false };
 
+    // --- CONTADOR EN TIEMPO REAL INTEGRAL PARA OBSERVACIONES (MAX 200) ---
+    function inicializarContadorObservaciones() {
+        // Buscamos cualquier input o textarea que esté dentro de nuestro contenedor de observaciones
+        const contenedor = document.getElementById('contenedor-observaciones');
+        if (!contenedor) return;
+
+        const textareaDesc = contenedor.querySelector('textarea') || contenedor.querySelector('input[type="text"]');
+        const contadorSpan = document.getElementById('char-count');
+
+        if (textareaDesc && contadorSpan) {
+            textareaDesc.setAttribute('maxlength', '200');
+
+            const actualizarContador = () => {
+                const longitud = textareaDesc.value.length;
+                contadorSpan.innerText = longitud;
+            };
+
+            // Escuchar todos los eventos posibles del elemento para evitar retrasos
+            textareaDesc.addEventListener('input', actualizarContador);
+            textareaDesc.addEventListener('keyup', actualizarContador);
+            textareaDesc.addEventListener('change', actualizarContador);
+            textareaDesc.addEventListener('paste', () => setTimeout(actualizarContador, 10));
+
+            textareaDesc.addEventListener('keydown', function(e) {
+                const teclasEspeciales = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', 'Enter'];
+                if (!teclasEspeciales.includes(e.key) && this.value.length >= 200) {
+                    e.preventDefault();
+                }
+            });
+
+            actualizarContador();
+        }
+    }
+
+    // Inicializar inmediatamente al cargar el documento
+    document.addEventListener("DOMContentLoaded", inicializarContadorObservaciones);
+    window.addEventListener("load", inicializarContadorObservaciones);
+
     document.getElementById('busquedaProducto').addEventListener('keyup', function() {
         const term = this.value.toLowerCase();
         document.querySelectorAll('#tablaSelector tbody tr').forEach(row => {
@@ -222,6 +306,23 @@
     });
 
     function agregarFilaProducto(id, precio, stock) {
+        // --- VALIDACIÓN DUPLICADOS ---
+        const inputsExistentes = document.querySelectorAll('#tabla-detalles select');
+        for (let select of inputsExistentes) {
+            if (select.value == id) {
+                const nombreItem = document.querySelector(`tr[data-id="${id}"] td.text-white`)?.innerText || "el producto";
+
+                Swal.fire({
+                    ...swalConfig,
+                    icon: 'error',
+                    title: 'Producto Duplicado',
+                    html: `El producto <b style="color: #f5a623;">${nombreItem.toUpperCase()}</b> ya está agregado al detalle. Modifica su cantidad si deseas llevar más.`,
+                    confirmButtonText: 'OK'
+                });
+                return;
+            }
+        }
+
         const totalFormsInput = document.getElementById('id_detalles_set-TOTAL_FORMS');
         const count = parseInt(totalFormsInput.value);
         const template = document.getElementById('empty-row-detalle');
@@ -241,7 +342,25 @@
         inputCant.setAttribute('data-precio', precio);
         inputCant.setAttribute('data-stock-max', stock);
 
+        // --- BLOQUEO DE TECLAS (MENOS, PUNTOS, COMAS Y MÁXIMO 3 CARACTERES) ---
+        inputCant.addEventListener('keydown', function(e) {
+            const teclasEspeciales = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', 'Enter'];
+
+            if (e.key === '-' || e.key === '.' || e.key === ',' || e.key === 'e' || e.key === 'E') {
+                e.preventDefault();
+                return;
+            }
+
+            if (!teclasEspeciales.includes(e.key) && this.value.length >= 3) {
+                e.preventDefault();
+            }
+        });
+
         inputCant.addEventListener('input', function() {
+            this.value = this.value.replace(/[-.,eE]/g, '');
+            if (this.value.length > 3) {
+                this.value = this.value.slice(0, 3);
+            }
             calcularSubtotal(this);
             validarStockFila(this);
         });
@@ -295,7 +414,7 @@
     }
 
     function confirmarVenta() {
-        const filas = document.querySelectorAll('#tabla-detalles tbody tr').length;
+        const filas = document.querySelectorAll('#tabla-detalles tbody tr');
         const erroresStock = document.querySelectorAll('.stock-insuficiente').length;
 
         if (erroresStock > 0) {
@@ -308,8 +427,29 @@
             return;
         }
 
-        if (filas === 0) {
+        if (filas.length === 0) {
             Swal.fire({...swalConfig, icon: 'warning', title: 'Carrito Vacío', text: 'Debes añadir al menos un producto.'});
+            return;
+        }
+
+        // --- VALIDACIÓN DE CANTIDADES VACÍAS O MENORES/IGUALES A 0 ---
+        let detallesValidos = true;
+        filas.forEach(fila => {
+            const cantInput = fila.querySelector('input[name*="cantidad"]');
+            const cant = cantInput ? parseFloat(cantInput.value) : 0;
+
+            if (isNaN(cant) || cant <= 0) {
+                detallesValidos = false;
+            }
+        });
+
+        if (!detallesValidos) {
+            Swal.fire({
+                ...swalConfig,
+                icon: 'warning',
+                title: 'Factura vacía',
+                text: 'Debes añadir al menos un producto con una cantidad válida y mayor a 0.'
+            });
             return;
         }
 
