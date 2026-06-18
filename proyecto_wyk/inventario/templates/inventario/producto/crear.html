@@ -160,7 +160,10 @@
                         <div class="form-group-wyk col-md-8">
                             <label class="form-label-wyk">Nombre del Producto</label>
                             <input type="text" name="nombre_producto" id="id_nombre_producto" class="input-wyk"
-                                   placeholder="Nombre descriptivo" value="{{ request.POST.nombre_producto|default:'' }}" required>
+                                   placeholder="Nombre descriptivo" value="{{ request.POST.nombre_producto|default:'' }}" maxlength="50" required>
+                            <div class="char-counter-container">
+                                <span id="contador_nombre" class="char-counter">0 / 50</span>
+                            </div>
                         </div>
 
                         <div class="form-group-wyk col-md-6">
@@ -175,7 +178,7 @@
                         <div class="form-group-wyk col-md-6">
                             <label class="form-label-wyk">Cantidad Inicial (Stock)</label>
                             <input type="number" name="cant_exist_producto" id="id_stock" class="input-wyk"
-                                   placeholder="0" min="0" oninput="this.value = this.value.replace(/[-.,eE]/g, '')" value="{{ request.POST.cant_exist_producto|default:'' }}" required>
+                                   placeholder="0" min="0" value="{{ request.POST.cant_exist_producto|default:'' }}" required>
                         </div>
 
                         <div class="form-group-wyk col-md-6">
@@ -300,6 +303,8 @@
         {% endif %}
 
         const inputIdProducto = document.getElementById('id_id_producto');
+        const inputNombre = document.getElementById('id_nombre_producto');
+        const contadorNombre = document.getElementById('contador_nombre');
         const inputPrecio = document.getElementById('id_precio');
         const inputStock = document.getElementById('id_stock');
         const inputDescripcion = document.getElementById('id_descripcion');
@@ -321,7 +326,7 @@
             inputFechaVenc.setAttribute('min', fechaMinimaStr);
         }
 
-        // --- MANEJO EN TIEMPO REAL DEL CÓDIGO / ID (EVITAR SIGNOS Y DECIMALES) ---
+        // --- MANEJO EN TIEMPO REAL DEL CÓDIGO / ID (EVITAR SIGNOS, DECIMALES Y MÁX 10 CARACTERES) ---
         if (inputIdProducto) {
             inputIdProducto.addEventListener('keydown', function(e) {
                 if (e.key === '-' || e.key === '.' || e.key === ',' || e.key === 'e' || e.key === 'E') {
@@ -330,14 +335,33 @@
             });
 
             inputIdProducto.addEventListener('input', function() {
+                // Limpiar caracteres inválidos
                 this.value = this.value.replace(/[-.,eE]/g, '');
+
+                // Forzar el máximo de 10 caracteres
+                if (this.value.length > 10) {
+                    this.value = this.value.substring(0, 10);
+                }
             });
         }
 
-        // --- MANEJO EN TIEMPO REAL DEL PRECIO (SEPARADOR DE MILES) ---
+        // --- CONTADOR DINÁMICO DE CARACTERES EN EL NOMBRE ---
+        if (inputNombre && contadorNombre) {
+            const actualizarContadorNombre = () => {
+                const longitud = inputNombre.value.length;
+                contadorNombre.textContent = `${longitud} / 50`;
+            };
+
+            actualizarContadorNombre();
+            inputNombre.addEventListener('input', actualizarContadorNombre);
+        }
+
+        // --- MANEJO EN TIEMPO REAL DEL PRECIO (SEPARADOR DE MILES Y MÁX 6 CARACTERES/DÍGITOS) ---
         if (inputPrecio) {
             if(inputPrecio.value) {
-                inputPrecio.value = formatNumber(inputPrecio.value);
+                let rawValue = inputPrecio.value.replace(/\D/g, "");
+                if (rawValue.length > 6) rawValue = rawValue.substring(0, 6);
+                inputPrecio.value = formatNumber(rawValue);
             }
 
             inputPrecio.addEventListener('keydown', function(e) {
@@ -348,11 +372,18 @@
             });
 
             inputPrecio.addEventListener('input', function() {
-                this.value = formatNumber(this.value);
+                let rawValue = this.value.replace(/\D/g, "");
+
+                // Forzar el máximo de 6 dígitos numéricos
+                if (rawValue.length > 6) {
+                    rawValue = rawValue.substring(0, 6);
+                }
+
+                this.value = formatNumber(rawValue);
             });
         }
 
-        // --- MANEJO EN TIEMPO REAL DEL STOCK ---
+        // --- MANEJO EN TIEMPO REAL DEL STOCK (MÁX 6 CARACTERES) ---
         if (inputStock) {
             inputStock.addEventListener('keydown', function(e) {
                 if (e.key === '-' || e.key === '.' || e.key === ',' || e.key === 'e' || e.key === 'E') {
@@ -361,7 +392,14 @@
             });
 
             inputStock.addEventListener('input', function() {
+                // Limpiar caracteres inválidos
                 this.value = this.value.replace(/[-.,eE]/g, '');
+
+                // Forzar el máximo de 6 caracteres
+                if (this.value.length > 6) {
+                    this.value = this.value.substring(0, 6);
+                }
+
                 if (parseInt(this.value) < 0) {
                     this.value = 0;
                 }
@@ -370,15 +408,13 @@
 
         // --- CONTADOR DINÁMICO DE CARACTERES EN LA DESCRIPCIÓN ---
         if (inputDescripcion && contadorDesc) {
-            const actualizarContador = () => {
+            const actualizarContadorDesc = () => {
                 const longitud = inputDescripcion.value.length;
                 contadorDesc.textContent = `${longitud} / 200`;
             };
 
-            // Ejecución inicial por si ya viene texto cargado
-            actualizarContador();
-
-            inputDescripcion.addEventListener('input', actualizarContador);
+            actualizarContadorDesc();
+            inputDescripcion.addEventListener('input', actualizarContadorDesc);
         }
     });
 

@@ -72,6 +72,41 @@
             min-height: 80px;
             resize: none;
         }
+
+        /* --- CONTENEDOR PARA PREFIJO MONETARIO --- */
+        .input-money-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+
+        .input-money-container .money-prefix {
+            position: absolute;
+            left: 18px;
+            color: var(--primary-wyk);
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .input-money-container .input-wyk {
+            padding-left: 35px !important;
+        }
+
+        /* --- ESTILOS PARA EL CONTADOR DE CARACTERES --- */
+        .char-counter-container {
+            display: flex;
+            justify-content: flex-end;
+            width: 100%;
+            margin-top: 4px;
+        }
+
+        .char-counter {
+            font-size: 0.75rem;
+            color: #f5a623;
+            opacity: 0.8;
+        }
     </style>
 {% endblock %}
 
@@ -103,15 +138,21 @@
                     <div class="form-group-wyk">
                         <label class="form-label-wyk">Nombre del Producto</label>
                         <input type="text" name="nombre_producto" id="id_nombre_producto" class="input-wyk"
-                               value="{{ form.nombre_producto.value|default:producto.nombre_producto }}" required>
+                               value="{{ form.nombre_producto.value|default:producto.nombre_producto }}" maxlength="50" required>
+                        <div class="char-counter-container">
+                            <span id="contador_nombre" class="char-counter">0 / 50</span>
+                        </div>
                     </div>
 
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group-wyk">
                                 <label class="form-label-wyk">Valor Unitario ($)</label>
-                                <input type="number" name="valor_unitario_product" id="id_valor_unitario" class="input-wyk"
-                                       value="{{ form.valor_unitario_product.value|default:producto.valor_unitario_product }}" step="0.01" required>
+                                <div class="input-money-container">
+                                    <span class="money-prefix">$</span>
+                                    <input type="text" name="valor_unitario_product" id="id_valor_unitario" class="input-wyk"
+                                           value="{{ form.valor_unitario_product.value|default:producto.valor_unitario_product }}" required>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -145,8 +186,11 @@
 
                     <div class="form-group-wyk">
                         <label class="form-label-wyk">Descripción del Producto (Opcional)</label>
-                        <textarea name="descripcion_producto" id="id_descripcion" class="input-wyk textarea-wyk"
+                        <textarea name="descripcion_producto" id="id_descripcion" class="input-wyk textarea-wyk" maxlength="200"
                                   placeholder="Breve detalle del producto...">{{ form.descripcion_producto.value|default:producto.descripcion_producto|default:'' }}</textarea>
+                        <div class="char-counter-container">
+                            <span id="contador_descripcion" class="char-counter">0 / 200</span>
+                        </div>
                     </div>
                 </div>
 
@@ -195,16 +239,115 @@
         scrollbarPadding: false
     };
 
-    {% if messages %}
-        {% for message in messages %}
-            Swal.fire({
-                ...swalConfig,
-                icon: "{% if 'success' in message.tags %}success{% else %}error{% endif %}",
-                title: "{% if 'success' in message.tags %}¡Listo!{% else %}¡Atención!{% endif %}",
-                text: "{{ message|escapejs }}"
+    // Función auxiliar para aplicar formato de miles (Ej: 15000 -> 15.000)
+    function formatNumber(value) {
+        return value.replace(/\D/g, "").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        {% if messages %}
+            {% for message in messages %}
+                Swal.fire({
+                    ...swalConfig,
+                    icon: "{% if 'success' in message.tags %}success{% else %}error{% endif %}",
+                    title: "{% if 'success' in message.tags %}¡Listo!{% else %}¡Atención!{% endif %}",
+                    text: "{{ message|escapejs }}"
+                });
+            {% endfor %}
+        {% endif %}
+
+        const inputNombre = document.getElementById('id_nombre_producto');
+        const contadorNombre = document.getElementById('contador_nombre');
+        const inputPrecio = document.getElementById('id_valor_unitario');
+        const inputStock = document.getElementById('id_cant_exist');
+        const inputDescripcion = document.getElementById('id_descripcion');
+        const contadorDesc = document.getElementById('contador_descripcion');
+        const inputFechaVenc = document.getElementById('id_fecha_vencimiento');
+
+        // --- RESTRICCIÓN PREVENTIVA EN EL CALENDARIO NATIVO (MÍNIMO MAÑANA) ---
+        if (inputFechaVenc) {
+            const hoy = new Date();
+            const mañana = new Date(hoy);
+            mañana.setDate(hoy.getDate() + 1);
+
+            const yyyy = mañana.getFullYear();
+            const mm = String(mañana.getMonth() + 1).padStart(2, '0');
+            const dd = String(mañana.getDate()).padStart(2, '0');
+
+            const fechaMinimaStr = `${yyyy}-${mm}-${dd}`;
+            inputFechaVenc.setAttribute('min', fechaMinimaStr);
+        }
+
+        // --- CONTADOR DINÁMICO DE CARACTERES EN EL NOMBRE ---
+        if (inputNombre && contadorNombre) {
+            const actualizarContadorNombre = () => {
+                const longitud = inputNombre.value.length;
+                contadorNombre.textContent = `${longitud} / 50`;
+            };
+
+            actualizarContadorNombre();
+            inputNombre.addEventListener('input', actualizarContadorNombre);
+        }
+
+        // --- MANEJO EN TIEMPO REAL DEL PRECIO (SEPARADOR DE MILES Y MÁX 6 CARACTERES/DÍGITOS) ---
+        if (inputPrecio) {
+            if(inputPrecio.value) {
+                // Formatear el valor inicial que viene de base de datos quitando decimales si existen .00
+                let rawValue = Math.round(parseFloat(inputPrecio.value)).toString().replace(/\D/g, "");
+                if (rawValue.length > 6) rawValue = rawValue.substring(0, 6);
+                inputPrecio.value = formatNumber(rawValue);
+            }
+
+            inputPrecio.addEventListener('keydown', function(e) {
+                const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete'];
+                if (!allowedKeys.includes(e.key) && isNaN(Number(e.key))) {
+                    e.preventDefault();
+                }
             });
-        {% endfor %}
-    {% endif %}
+
+            inputPrecio.addEventListener('input', function() {
+                let rawValue = this.value.replace(/\D/g, "");
+
+                if (rawValue.length > 6) {
+                    rawValue = rawValue.substring(0, 6);
+                }
+
+                this.value = formatNumber(rawValue);
+            });
+        }
+
+        // --- MANEJO EN TIEMPO REAL DEL STOCK (MÁX 6 CARACTERES) ---
+        if (inputStock) {
+            inputStock.addEventListener('keydown', function(e) {
+                if (e.key === '-' || e.key === '.' || e.key === ',' || e.key === 'e' || e.key === 'E') {
+                    e.preventDefault();
+                }
+            });
+
+            inputStock.addEventListener('input', function() {
+                this.value = this.value.replace(/[-.,eE]/g, '');
+
+                if (this.value.length > 6) {
+                    this.value = this.value.substring(0, 6);
+                }
+
+                if (parseInt(this.value) < 0) {
+                    this.value = 0;
+                }
+            });
+        }
+
+        // --- CONTADOR DINÁMICO DE CARACTERES EN LA DESCRIPCIÓN ---
+        if (inputDescripcion && contadorDesc) {
+            const actualizarContadorDesc = () => {
+                const longitud = inputDescripcion.value.length;
+                contadorDesc.textContent = `${longitud} / 200`;
+            };
+
+            actualizarContadorDesc();
+            inputDescripcion.addEventListener('input', actualizarContadorDesc);
+        }
+    });
 
     function handleImagePreview(input) {
         if (input.files && input.files[0]) {
@@ -218,16 +361,53 @@
 
     function confirmarActualizacion() {
         const nombre = document.getElementById('id_nombre_producto').value.trim();
-        const precio = document.getElementById('id_valor_unitario').value;
+        const inputPrecio = document.getElementById('id_valor_unitario');
         const stock = document.getElementById('id_cant_exist').value;
+        const fechaVencVal = document.getElementById('id_fecha_vencimiento').value;
 
-        // La descripción ya no es obligatoria para la validación de JS
-        if (!nombre || !precio || !stock) {
+        const precioLimpio = inputPrecio.value.replace(/\./g, "");
+
+        if (!nombre || !precioLimpio || !stock || !fechaVencVal) {
             Swal.fire({
                 ...swalConfig,
                 icon: 'warning',
                 title: 'Campos incompletos',
                 text: 'Por favor, asegúrese de llenar los campos obligatorios (Nombre, Precio y Stock).'
+            });
+            return;
+        }
+
+        // --- VALIDACIÓN LÓGICA DE LA FECHA DE VENCIMIENTO ---
+        const fechaSeleccionada = new Date(fechaVencVal + 'T00:00:00');
+        const fechaHoy = new Date();
+        fechaHoy.setHours(0, 0, 0, 0);
+
+        if (fechaSeleccionada <= fechaHoy) {
+            Swal.fire({
+                ...swalConfig,
+                icon: 'warning',
+                title: 'Fecha inválida',
+                text: 'La fecha de vencimiento debe ser estrictamente posterior al día de hoy.'
+            });
+            return;
+        }
+
+        if (parseInt(precioLimpio) <= 0) {
+            Swal.fire({
+                ...swalConfig,
+                icon: 'warning',
+                title: 'Precio inválido',
+                text: 'El Precio Unitario debe ser estrictamente mayor a 0.'
+            });
+            return;
+        }
+
+        if (parseInt(stock) < 0) {
+            Swal.fire({
+                ...swalConfig,
+                icon: 'warning',
+                title: 'Stock inválido',
+                text: 'La cantidad actual no puede ser un número negativo.'
             });
             return;
         }
@@ -242,6 +422,7 @@
             cancelButtonText: 'Cancelar'
         }).then((result) => {
             if (result.isConfirmed) {
+                inputPrecio.value = precioLimpio; // Enviar número crudo sin puntos a Django
                 document.getElementById('formEditarProducto').submit();
             }
         });
