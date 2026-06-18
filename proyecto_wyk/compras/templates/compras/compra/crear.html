@@ -236,7 +236,7 @@
                         {% for m in materias_primas %}
                         <tr class="fila-seleccionable" data-id="{{ m.id_materia_prima }}" data-nombre="{{ m.nombre_materia_prima }}">
                             <td class="text-center text-gold">{{ m.id_materia_prima }}</td>
-                            <td class="text-white">{{ m.nombre_materia_prima }}</td>
+                            <td class="text-white nombre-item">{{ m.nombre_materia_prima }}</td>
                             <td class="text-center">
                                 <span class="badge-nivel">{{ m.cantidad_exist_mat_prima|floatformat:"-3" }}</span>
                                 <span class="unit-subtitle">{{ m.presentacion_mat_prima|lower }}</span>
@@ -279,7 +279,7 @@
                         {% for pr in productos %}
                         <tr class="fila-seleccionable" data-id="{{ pr.id_producto }}" data-nombre="{{ pr.nombre_producto }}">
                             <td class="text-center text-gold">{{ pr.id_producto }}</td>
-                            <td class="text-white">{{ pr.nombre_producto }}</td>
+                            <td class="text-white nombre-item">{{ pr.nombre_producto }}</td>
                             <td class="text-gold" style="font-size: 0.75rem;">{{ pr.tipo_producto }}</td>
                             <td class="text-center">
                                 <span class="badge-nivel">{{ pr.cant_exist_producto }}</span>
@@ -334,15 +334,20 @@
         const sProd = document.getElementById('section-producto');
         const btnAdd = document.getElementById('btn-add-insumo');
 
+        // Deshabilitar todo antes de cambiar para evitar errores de validación de Django
+        document.querySelectorAll('.table-wrap input, .table-wrap select').forEach(el => el.disabled = true);
+
         sMat.classList.add('hidden-section');
         sProd.classList.add('hidden-section');
         btnAdd.style.display = tipo ? 'block' : 'none';
 
         if (tipo === 'MATERIA PRIMA') {
             sMat.classList.remove('hidden-section');
+            sMat.querySelectorAll('input, select').forEach(el => el.disabled = false);
             document.getElementById('tipoItemDisplay').innerText = "MATERIAS PRIMAS";
         } else if (tipo === 'PRODUCTO TERMINADO') {
             sProd.classList.remove('hidden-section');
+            sProd.querySelectorAll('input, select').forEach(el => el.disabled = false);
             document.getElementById('tipoItemDisplay').innerText = "PRODUCTOS TERMINADOS";
         }
         sumarTodo();
@@ -356,8 +361,26 @@
 
     /* FILAS DINÁMICAS */
     function agregarFila(tipo, item_id) {
-        const prefijo = tipo === 'MATERIA PRIMA' ? 'detallecompramateriaprima_set' : 'detallecompraproducto_set';
+        // --- VALIDACIÓN DUPLICADOS ---
         const tablaId = tipo === 'MATERIA PRIMA' ? '#tabla-materia' : '#tabla-producto';
+        const inputsExistentes = document.querySelectorAll(`${tablaId} select`);
+
+        for (let select of inputsExistentes) {
+            if (select.value == item_id) {
+                const nombreItem = document.querySelector(`tr[data-id="${item_id}"] .nombre-item`)?.innerText || "el ítem";
+
+                Swal.fire({
+                    ...swalConfig,
+                    icon: 'error',
+                    title: 'Ingrediente Duplicado',
+                    html: `El insumo <b style="color: #f5a623;">${nombreItem.toUpperCase()}</b> ya se encuentra en el detalle de la receta. No puedes repetirlo.`,
+                    confirmButtonText: 'OK'
+                });
+                return;
+            }
+        }
+
+        const prefijo = tipo === 'MATERIA PRIMA' ? 'detallecompramateriaprima_set' : 'detallecompraproducto_set';
         const templateId = tipo === 'MATERIA PRIMA' ? 'empty-row-materia' : 'empty-row-producto';
 
         const totalFormsInput = document.getElementById(`id_${prefijo}-TOTAL_FORMS`);
@@ -369,22 +392,36 @@
         nuevaFila.innerHTML = nuevaFila.innerHTML.replace(/__prefix__/g, totalForms);
         document.querySelector(`${tablaId} tbody`).appendChild(nuevaFila);
 
-        // CONFIGURACIÓN DE LOS INPUTS DE LA FILA
+        // CONFIGURACIÓN DE LOS INPUTS DE LA FILA Y VALIDACIONES
         const selectItem = nuevaFila.querySelector('select');
         const inputSubtotal = nuevaFila.querySelector('input[name*="sub_total"]');
         const inputCantidad = nuevaFila.querySelector('input[name*="cantidad"]');
 
         if(selectItem) selectItem.value = item_id;
 
+        const validarTeclas = (e) => {
+            // 1. Bloquear siempre el signo menos
+            if (e.key === '-' || e.key === 'Minus') {
+                e.preventDefault();
+            }
+            // 2. Si es Producto, bloquear punto y coma
+            if (tipo === 'PRODUCTO TERMINADO' && (e.key === '.' || e.key === ',' || e.key === 'Decimal')) {
+                e.preventDefault();
+            }
+        };
+
         if(inputSubtotal) {
             inputSubtotal.removeAttribute('readonly');
             inputSubtotal.removeAttribute('disabled');
             inputSubtotal.addEventListener('input', sumarTodo);
+            inputSubtotal.addEventListener('keydown', validarTeclas);
         }
 
         if(inputCantidad) {
             inputCantidad.removeAttribute('readonly');
             inputCantidad.removeAttribute('disabled');
+            inputCantidad.addEventListener('keydown', validarTeclas);
+            inputCantidad.addEventListener('input', sumarTodo);
         }
 
         totalFormsInput.value = totalForms + 1;
@@ -421,26 +458,39 @@
     function confirmarGuardado() {
         const proveedor = document.getElementById('id_prov_hidden').value;
         const tipo = document.getElementById('id_tipo_compra').value;
-        const total = parseFloat(document.getElementById('id_total_hidden').value);
 
-        // Validar Proveedor y Tipo antes que nada
         if (!proveedor || !tipo) {
-            Swal.fire({
-                ...swalConfig,
-                icon: 'warning',
-                title: 'Campos Incompletos',
-                text: 'Debes seleccionar un proveedor y el tipo de carga.'
-            });
+            Swal.fire({ ...swalConfig, icon: 'warning', title: 'Campos Incompletos', text: 'Debes seleccionar un proveedor y el tipo de carga.' });
             return;
         }
 
-        // Validar que la factura tenga items
-        if (!total || total <= 0) {
+        const selector = tipo === 'MATERIA PRIMA' ? '#tabla-materia' : '#tabla-producto';
+        const filas = document.querySelectorAll(`${selector} tbody tr`);
+
+        if (filas.length === 0) {
+            Swal.fire({ ...swalConfig, icon: 'warning', title: 'Factura vacía', text: 'Debes añadir al menos un item.' });
+            return;
+        }
+
+        let detallesValidos = true;
+        filas.forEach(fila => {
+            const cantInput = fila.querySelector('input[name*="cantidad"]');
+            const subInput = fila.querySelector('input[name*="sub_total"]');
+
+            const cant = cantInput ? parseFloat(cantInput.value) : 0;
+            const sub = subInput ? parseFloat(subInput.value) : 0;
+
+            if (isNaN(cant) || cant <= 0 || isNaN(sub) || sub <= 0) {
+                detallesValidos = false;
+            }
+        });
+
+        if (!detallesValidos) {
             Swal.fire({
                 ...swalConfig,
                 icon: 'warning',
                 title: 'Factura vacía',
-                text: 'Debes añadir al menos un item con un subtotal válido.'
+                text: 'Debes añadir al menos un item con una cantidad y un subtotal válidos.'
             });
             return;
         }
@@ -454,7 +504,10 @@
             confirmButtonText: 'Sí, procesar',
             cancelButtonText: 'Cancelar'
         }).then((result) => {
-            if (result.isConfirmed) document.getElementById('formNuevaCompra').submit();
+            if (result.isConfirmed) {
+                document.querySelectorAll(`${selector} input, ${selector} select`).forEach(el => el.disabled = false);
+                document.getElementById('formNuevaCompra').submit();
+            }
         });
     }
 </script>

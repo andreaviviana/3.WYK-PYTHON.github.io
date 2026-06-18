@@ -1,6 +1,32 @@
 from django import forms
-from django.forms import inlineformset_factory
+from django.forms import inlineformset_factory, BaseInlineFormSet
 from .models import Proveedor, Compra, DetalleCompraMateriaPrima, DetalleCompraProducto
+
+
+# --------------------------------- VALIDACIÓN DE DUPLICADOS ---------------------------------
+class BaseDetalleCompraFormSet(BaseInlineFormSet):
+    def clean(self):
+        """ Valida que no haya productos duplicados en el FormSet """
+        super().clean()
+        if any(self.errors):
+            return
+
+        items = []
+        for form in self.forms:
+            # Si el formulario está marcado para borrado, lo ignoramos
+            if self.can_delete and form.cleaned_data.get('DELETE'):
+                continue
+
+            # Obtenemos el ID del producto o materia prima según el formset
+            item = form.cleaned_data.get('id_mat_prima_fk_det_compra_mat_prima') or \
+                   form.cleaned_data.get('id_prod_fk_det_compra_prod')
+
+            if item:
+                if item in items:
+                    raise forms.ValidationError(
+                        "No puedes agregar el mismo producto o insumo dos veces en la misma compra.")
+                items.append(item)
+
 
 # --------------------------------- FORMULARIO PROVEEDOR ---------------------------------
 class ProveedorForm(forms.ModelForm):
@@ -94,7 +120,6 @@ class CompraForm(forms.ModelForm):
         widgets = {
             'id_proveedor_fk_compra': forms.Select(attrs={'class': 'input-wyk', 'required': True}),
             'tipo': forms.Select(attrs={'class': 'input-wyk', 'id': 'id_tipo_compra', 'required': True}),
-            # Agregamos readonly o bloqueado vía HTML para asegurar que siempre empiece en PENDIENTE
             'estado_factura_compra': forms.Select(attrs={'class': 'input-wyk', 'id': 'id_estado_factura'}),
             'descripcion_compra': forms.Textarea(attrs={
                 'class': 'input-wyk',
@@ -110,13 +135,15 @@ class CompraForm(forms.ModelForm):
 DetalleMateriaPrimaFormSet = inlineformset_factory(
     Compra,
     DetalleCompraMateriaPrima,
+    formset=BaseDetalleCompraFormSet,
     fields=[
         'id_mat_prima_fk_det_compra_mat_prima',
         'cantidad_mat_prima_comprada',
         'sub_total_mat_prima_comprada'
     ],
     widgets={
-        'id_mat_prima_fk_det_compra_mat_prima': forms.Select(attrs={'class': 'input-wyk select-item', 'required': True}),
+        'id_mat_prima_fk_det_compra_mat_prima': forms.Select(
+            attrs={'class': 'input-wyk select-item', 'required': True}),
         'cantidad_mat_prima_comprada': forms.NumberInput(attrs={
             'class': 'input-wyk cantidad-input',
             'step': '0.001',
@@ -125,11 +152,11 @@ DetalleMateriaPrimaFormSet = inlineformset_factory(
         }),
         'sub_total_mat_prima_comprada': forms.NumberInput(attrs={
             'class': 'input-wyk subtotal-input',
-            'readonly': 'readonly', # Generalmente calculado por JS
+            'readonly': 'readonly',
             'required': True
         }),
     },
-    extra=0, # Cambiado a 0 para que no aparezca una fila vacía innecesaria si usas JS para añadir filas
+    extra=0,
     can_delete=True
 )
 
@@ -137,6 +164,7 @@ DetalleMateriaPrimaFormSet = inlineformset_factory(
 DetalleProductoFormSet = inlineformset_factory(
     Compra,
     DetalleCompraProducto,
+    formset=BaseDetalleCompraFormSet,
     fields=[
         'id_prod_fk_det_compra_prod',
         'cantidad_prod_comprado',
@@ -146,6 +174,7 @@ DetalleProductoFormSet = inlineformset_factory(
         'id_prod_fk_det_compra_prod': forms.Select(attrs={'class': 'input-wyk select-item', 'required': True}),
         'cantidad_prod_comprado': forms.NumberInput(attrs={
             'class': 'input-wyk cantidad-input',
+            'step': '1',
             'min': '1',
             'required': True
         }),

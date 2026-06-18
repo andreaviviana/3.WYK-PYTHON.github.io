@@ -135,7 +135,6 @@ def crear_compra(request):
     proveedores = Proveedor.objects.filter(estado_proveedor=True)
     materias_primas = MateriaPrima.objects.filter(estado_materia_prima=True)
 
-    # CORRECCIÓN AQUÍ: Se cambió 'categoria_producto' por 'tipo_producto'
     productos = Producto.objects.filter(
         estado_producto=True,
         tipo_producto__in=['REVENTA', 'ASEO']
@@ -162,27 +161,31 @@ def crear_compra(request):
                     if tipo_compra == 'MATERIA PRIMA':
                         formset_mat.instance = nueva_compra
                         if formset_mat.is_valid():
-                            for d in formset_mat.save(commit=False):
+                            datos = formset_mat.save(commit=False)
+                            if not datos:
+                                raise ValueError("Debes añadir al menos un insumo a la compra.")
+                            for d in datos:
                                 d.estado_det_compra_mat_prima = True
                                 d.save()
                                 total_calculado += d.sub_total_mat_prima_comprada
                         else:
-                            raise ValueError("Los detalles de la materia prima están incompletos o son inválidos.")
+                            raise ValueError("Los detalles de la materia prima son inválidos.")
 
                     elif tipo_compra == 'PRODUCTO TERMINADO':
                         formset_prod.instance = nueva_compra
                         if formset_prod.is_valid():
-                            for d in formset_prod.save(commit=False):
-                                # CORRECCIÓN AQUÍ: Se cambió 'categoria_producto' por 'tipo_producto'
+                            datos = formset_prod.save(commit=False)
+                            if not datos:
+                                raise ValueError("Debes añadir al menos un producto a la compra.")
+                            for d in datos:
                                 prod = d.id_prod_fk_det_compra_prod
                                 if prod.tipo_producto not in ['REVENTA', 'ASEO']:
-                                    raise ValueError(f"El producto '{prod.nombre_producto}' no es permitido para compra.")
-
+                                    raise ValueError(f"El producto '{prod.nombre_producto}' no es permitido.")
                                 d.estado_det_compra_prod = True
                                 d.save()
                                 total_calculado += d.sub_total_prod_comprado
                         else:
-                            raise ValueError("Los detalles de los productos están incompletos o son inválidos.")
+                            raise ValueError("Los detalles de los productos son inválidos.")
 
                     nueva_compra.total_compra = total_calculado
                     nueva_compra.save()
@@ -191,7 +194,7 @@ def crear_compra(request):
                     return redirect('lista_compras')
 
             except Exception as e:
-                messages.error(request, f"Error: {str(e)}")
+                messages.error(request, str(e))
         else:
             messages.error(request, "Campos incompletos: Asegúrate de seleccionar un proveedor y el tipo de compra.")
 
