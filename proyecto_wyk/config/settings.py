@@ -178,3 +178,8 @@ LOGIN_REDIRECT_URL = 'inicio'
 
 # A dónde va el usuario después de cerrar sesión (Logout)
 LOGOUT_REDIRECT_URL = 'login'
+
+# Permitir que Django acepte las solicitudes del dominio de Railway de forma segura
+CSRF_TRUSTED_ORIGINS = [
+    'https://3wyk-pythongithubio-production.up.railway.app',
+]
