@@ -353,40 +353,6 @@ def crear_ajuste_producto(request):
     productos = Producto.objects.filter(estado_producto=True)
     return render(request, 'inventario/ajuste_producto/crear.html', {'productos': productos})
 
-
-@login_required
-def editar_ajuste_producto(request, id_ajuste):
-    if request.user.rol_fk_usuario.rol != 'ADMIN':
-        messages.error(request, "Acceso denegado.")
-        return redirect('lista_ajustes_producto')
-
-    ajuste = get_object_or_404(AjusteInventario, id_ajuste=id_ajuste)
-    producto = ajuste.id_prod_fk_ajuste
-
-    form = AjusteInventarioForm(request.POST or None, instance=ajuste, producto=producto)
-
-    if request.method == 'POST':
-        if form.is_valid():
-            try:
-                with transaction.atomic():
-                    ajuste_editado = form.save(commit=False)
-                    valor_anterior = AjusteInventario.objects.get(pk=id_ajuste).cantidad_ajustada
-                    producto.cant_exist_producto += valor_anterior
-                    producto.cant_exist_producto -= ajuste_editado.cantidad_ajustada
-                    producto.save()
-
-                    ajuste_editado.save()
-                    messages.success(request, "Ajuste actualizado correctamente y stock recalculado.")
-                    return redirect('lista_ajustes_producto')
-            except Exception as e:
-                messages.error(request, f"Error al editar: {e}")
-        else:
-            for error in form.errors.values():
-                messages.error(error)
-
-    return render(request, 'inventario/ajuste_producto/editar.html', {'ajuste': ajuste, 'form': form})
-
-
 @login_required
 def eliminar_ajuste_producto(request, id_ajuste):
     if request.user.rol_fk_usuario.rol != 'ADMIN':

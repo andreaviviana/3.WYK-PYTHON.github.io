@@ -19,6 +19,15 @@
         }
         /* Estilo para el select de tipo */
         .select-wyk { padding-right: 40px !important; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23f5a623'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 15px center; background-size: 20px; }
+
+        /* Estilo para el contador de caracteres al estilo WYK */
+        .char-counter-wyk {
+            text-align: right;
+            font-size: 0.85rem;
+            color: #f5a623;
+            margin-top: 5px;
+            font-weight: 600;
+        }
     </style>
 {% endblock %}
 
@@ -68,8 +77,10 @@
                 <div class="col-md-6">
                     <div class="form-group-wyk">
                         <label class="form-label-wyk">Cantidad a Retirar</label>
-                        <input type="number" name="cantidad_ajustada" id="id_cantidad" class="input-wyk"
-                               step="1" min="1" placeholder="Ej: 10" required>
+                        <input type="text" name="cantidad_ajustada" id="id_cantidad" class="input-wyk"
+                               placeholder="Ej: 10" maxlength="7" required
+                               onkeydown="if(['-', '.', ',', 'e', 'E'].includes(event.key)) event.preventDefault();"
+                               oninput="formatMiles(this)">
                     </div>
                 </div>
             </div>
@@ -77,7 +88,8 @@
             <div class="form-group-wyk">
                 <label class="form-label-wyk">Observaciones / Detalles</label>
                 <textarea name="descripcion" id="id_descripcion" class="input-wyk" rows="3"
-                          placeholder="Información adicional sobre el ajuste..." required></textarea>
+                          placeholder="Información adicional sobre el ajuste..." maxlength="200" required></textarea>
+                <div class="char-counter-wyk"><span id="counter_val">0</span> / 200</div>
             </div>
 
             <div class="form-actions-wyk">
@@ -143,6 +155,33 @@
 <script>
     const swalConfig = { background: '#1a0a00', color: '#fff', confirmButtonColor: '#f5a623', heightAuto: false };
 
+    /* CONTROL DINÁMICO DEL CONTADOR DE CARACTERES EN TIEMPO REAL */
+    const textareaDesc = document.getElementById('id_descripcion');
+    const counterVal = document.getElementById('counter_val');
+
+    textareaDesc.addEventListener('input', function() {
+        counterVal.innerText = this.value.length;
+    });
+
+    /* FUNCIÓN PARA FORMATEAR MILES Y LIMITAR A 6 DÍGITOS NUMÉRICOS */
+    function formatMiles(input) {
+        let valor = input.value.replace(/[^0-9]/g, '');
+
+        if (valor.startsWith('0')) {
+            valor = '';
+        }
+
+        if (valor.length > 6) {
+            valor = valor.slice(0, 6);
+        }
+
+        if (valor !== '') {
+            input.value = Number(valor).toLocaleString('de-DE');
+        } else {
+            input.value = '';
+        }
+    }
+
     /* LOGICA DEL SELECTOR DE PRODUCTO DENTRO DEL MODAL */
     document.querySelectorAll('#tablaSelector tbody tr').forEach(fila => {
         fila.addEventListener('click', function() {
@@ -151,7 +190,6 @@
             document.getElementById('current_stock_val').innerText = this.getAttribute('data-stock');
             document.getElementById('stock_badge').style.display = 'block';
 
-            // Cerrar el modal de Bootstrap
             const modalElement = document.getElementById('modalProductos');
             const modal = bootstrap.Modal.getInstance(modalElement);
             modal.hide();
@@ -170,7 +208,11 @@
     function confirmarRegistroAjuste() {
         const producto = document.getElementById('id_producto_hidden').value;
         const tipo = document.getElementById('id_tipo_ajuste').value;
-        const cantidad = parseInt(document.getElementById('id_cantidad').value);
+        const inputCantidad = document.getElementById('id_cantidad').value;
+
+        const cantidadLimpia = inputCantidad.replace(/\./g, '');
+        const cantidad = parseInt(cantidadLimpia);
+
         const stockActualSpan = document.getElementById('current_stock_val').innerText;
         const stockActual = parseInt(stockActualSpan);
         const desc = document.getElementById('id_descripcion').value.trim();
@@ -186,20 +228,21 @@
         }
 
         if (cantidad > stockActual) {
-            Swal.fire({ ...swalConfig, icon: 'error', title: 'Stock Insuficiente', text: `No puedes retirar ${cantidad} unidades. El stock disponible es de ${stockActual}.` });
+            Swal.fire({ ...swalConfig, icon: 'error', title: 'Stock Insuficiente', text: `No puedes retirar ${inputCantidad} unidades. El stock disponible es de ${stockActual.toLocaleString('de-DE')}.` });
             return;
         }
 
         Swal.fire({
             ...swalConfig,
             title: '¿Aplicar Ajuste?',
-            text: `Se descontarán ${cantidad} unidades de stock por motivo de "${tipo}".`,
+            text: `Se descontarán ${inputCantidad} unidades de stock por motivo de "${tipo}".`,
             icon: 'question',
             showCancelButton: true,
             confirmButtonText: 'Sí, aplicar',
             cancelButtonText: 'Cancelar'
         }).then((result) => {
             if (result.isConfirmed) {
+                document.getElementById('id_cantidad').value = cantidadLimpia;
                 document.getElementById('formCrearAjuste').submit();
             }
         });

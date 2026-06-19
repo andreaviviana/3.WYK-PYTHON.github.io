@@ -167,7 +167,6 @@
                             </div>
                         </td>
                         <td class="text-center">
-                            <a href="{% url 'editar_ajuste_producto' a.id_ajuste %}" class="btn-action"><i class="fas fa-edit"></i></a>
                             <button type="button" onclick="confirmarEliminarAjuste('{{ a.id_ajuste }}', '{{ a.id_prod_fk_ajuste.nombre_producto }}')" class="btn-action" style="color: #ff8a8a;">
                                 <i class="fas fa-trash"></i>
                             </button>

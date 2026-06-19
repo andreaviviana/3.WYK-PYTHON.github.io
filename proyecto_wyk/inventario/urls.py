@@ -21,7 +21,6 @@ urlpatterns = [
     # --- RUTAS DE AJUSTES DE INVENTARIO (PRODUCTOS) ---
     path('ajustes/productos/', views.lista_ajustes_producto, name='lista_ajustes_producto'),
     path('ajustes/productos/crear/', views.crear_ajuste_producto, name='crear_ajuste_producto'),
-    path('ajustes/productos/editar/<int:id_ajuste>/', views.editar_ajuste_producto, name='editar_ajuste_producto'),
     path('ajustes/productos/eliminar/<int:id_ajuste>/', views.eliminar_ajuste_producto, name='eliminar_ajuste_producto'),
 
     # proyecto_wyk/inventario/urls.py
